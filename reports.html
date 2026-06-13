@@ -147,33 +147,53 @@
             }
         }
 
+        // --- BULLETPROOF IMAGE DOWNLOAD FIX ---
         window.downloadReport = () => {
+            if(window.Haptics) window.Haptics.light();
             const btn = document.getElementById('dl-btn');
             const originalHTML = btn.innerHTML;
             btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...`;
             
-            // 1. Detect if AMOLED Dark Mode is currently active
+            // Detect theme
             const isDark = document.documentElement.classList.contains('dark');
             const cardBgColor = isDark ? '#0a0a0a' : '#ffffff';
+            const targetEl = document.getElementById('ledger-card');
 
-            // 2. Capture the card with scroll fixes applied
-            html2canvas(document.getElementById('ledger-card'), { 
-                scale: 3, 
-                backgroundColor: cardBgColor,
-                scrollY: -window.scrollY, // Forces the capture to ignore mobile scrolling
-                windowY: 0,
-                useCORS: true
-            }).then(canvas => {
-                const link = document.createElement('a');
-                link.download = 'Family_Ledger_Statement.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-                btn.innerHTML = originalHTML;
-            }).catch(err => {
-                console.error("Image generation failed:", err);
-                alert("Failed to generate image. Please try again.");
-                btn.innerHTML = originalHTML;
-            });
+            // 1. Save exact scroll position
+            const currentScroll = window.scrollY || document.documentElement.scrollTop;
+            
+            // 2. Brute-force scroll to absolute top
+            window.scrollTo(0, 0);
+
+            // 3. Wait exactly 300ms for browser graphics to repaint the DOM
+            setTimeout(() => {
+                html2canvas(targetEl, { 
+                    scale: 3, 
+                    backgroundColor: cardBgColor,
+                    useCORS: true,
+                    allowTaint: true,
+                    width: targetEl.offsetWidth,
+                    height: targetEl.offsetHeight,
+                    windowY: 0,
+                    scrollY: 0
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'Family_Ledger_Statement.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    
+                    // Restore button and scroll position
+                    btn.innerHTML = originalHTML;
+                    window.scrollTo(0, currentScroll);
+                    if(window.Haptics) window.Haptics.success();
+                }).catch(err => {
+                    console.error("Image generation failed:", err);
+                    alert("Failed to generate image. Please try again.");
+                    btn.innerHTML = originalHTML;
+                    window.scrollTo(0, currentScroll);
+                    if(window.Haptics) window.Haptics.warning();
+                });
+            }, 300);
         };
 
         generateReport();
