@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - Expense Tracker</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#dc2626">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(15px); }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; color: transparent !important; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+    
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        const supabase = createClient('https://xhcrkmmowcjsjiqdqcmb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoY3JrbW1vd2Nqc2ppcWRxY21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NzE2NjksImV4cCI6MjA5NjI0NzY2OX0.Pf71TqC4YZvvtcH17tH1CgWfDLPvKXodVP0FvPjXzIA');
+
+        let expenseChart = null;
+
+        const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#ef4444', '#14b8a6', '#f97316'];
+
+        async function generateReport() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) { window.location.href = 'login.html'; return; }
+            
+            const { data } = await supabase.from('transactions').select('*');
+            
+            let opening = 0, expenses = 0;
+            const catTotals = {};
+
+            data.forEach(tx => {
+                const amount = Number(tx.amount);
+                if(tx.type === 'balance') opening += amount;
+                else {
+                    expenses += amount;
+                    if(!catTotals[tx.category]) catTotals[tx.category] = 0;
+                    catTotals[tx.category] += amount;
+                }
+            });
+
+            const openEl = document.getElementById('opening');
+            const spentEl = document.getElementById('spent');
+            const remEl = document.getElementById('rem');
+            const centerSpentEl = document.getElementById('center-spent');
+
+            openEl.classList.remove('skeleton', 'w-16', 'h-5');
+            openEl.innerText = opening.toLocaleString('en-US', {minimumFractionDigits: 2});
+
+            spentEl.classList.remove('skeleton', 'w-16', 'h-5');
+            spentEl.innerText = `-${expenses.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+            remEl.classList.remove('skeleton', 'w-24', 'h-8');
+            remEl.innerText = (opening - expenses).toLocaleString('en-US', {minimumFractionDigits: 2});
+
+            if(centerSpentEl) centerSpentEl.innerText = `৳${expenses.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+            const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+            const breakdownList = document.getElementById('category-breakdown-list');
+            const chartContainer = document.getElementById('chart-container');
+            
+            if(sortedCats.length === 0) {
+                chartContainer.classList.add('hidden');
+                breakdownList.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-6 opacity-60">
+                        <svg class="w-10 h-10 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p class="text-xs font-semibold text-gray-500">No expenses recorded</p>
+                    </div>`;
+            } else {
+                breakdownList.innerHTML = sortedCats.map(([cat, amt], index) => {
+                    const color = chartColors[index % chartColors.length];
+                    const percentage = ((amt / expenses) * 100).toFixed(1);
+                    return `
+                    <div class="flex justify-between items-center pb-3 border-b border-dashed border-gray-100 last:border-0 last:pb-0">
+                        <div class="flex items-center gap-3">
+                            <span class="w-3 h-3 rounded-full shadow-sm" style="background-color: ${color}"></span>
+                            <span class="text-sm font-semibold text-gray-700">${cat}</span>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-sm font-bold text-gray-900">${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                            <span class="text-[10px] font-bold text-gray-400 tracking-wider">${percentage}%</span>
+                        </div>
+                    </div>
+                `}).join('');
+
+                chartContainer.classList.remove('hidden');
+                const ctx = document.getElementById('expense-chart').getContext('2d');
+                
+                const chartLabels = sortedCats.map(item => item[0]);
+                const chartData = sortedCats.map(item => item[1]);
+
+                if (expenseChart) expenseChart.destroy(); 
+
+                expenseChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [{
+                            data: chartData,
+                            backgroundColor: chartColors,
+                            borderWidth: 0, 
+                            hoverOffset: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '80%', 
+                        elements: { arc: { borderRadius: 6 } },
+                        plugins: {
+                            legend: { display: false }, 
+                            tooltip: {
+                                backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                                titleFont: { size: 11, family: 'sans-serif' },
+                                bodyFont: { size: 14, weight: 'bold', family: 'sans-serif' },
+                                padding: 12,
+                                cornerRadius: 12,
+                                displayColors: true,
+                                boxPadding: 6,
+                                callbacks: {
+                                    label: function(context) {
+                                        let value = context.parsed;
+                                        let perc = ((value / expenses) * 100).toFixed(1);
+                                        return ` ৳${value.toLocaleString('en-US', {minimumFractionDigits: 2})} (${perc}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        animation: { animateScale: true, animateRotate: true }
+                    }
+                });
+            }
+        }
+
+        window.downloadReport = () => {
+            const btn = document.getElementById('dl-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...`;
+            
+            html2canvas(document.getElementById('ledger-card'), { scale: 3, backgroundColor: '#ffffff' }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'Family_Ledger_Statement.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                btn.innerHTML = originalHTML;
+            });
+        };
+
+        generateReport();
+    </script>
+</head>
+<body class="bg-gray-50 font-sans p-5 pb-24">
+    <div class="mb-6 slide-up">
+        <h1 class="text-2xl font-bold tracking-tight">Financial Report</h1>
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Aggregated Statement</p>
+    </div>
+    
+    <div id="ledger-card" class="bg-white rounded-[24px] shadow-sm border border-gray-100 mb-6 overflow-hidden slide-up delay-100 relative">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-red-800"></div>
+        
+        <div class="p-6 bg-gray-50 border-b border-gray-100 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Balance</span>
+                <span class="text-sm font-bold text-green-600 skeleton w-16 h-5" id="opening">0.00</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Expenses</span>
+                <span class="text-sm font-bold text-red-600 skeleton w-16 h-5" id="spent">0.00</span>
+            </div>
+        </div>
+
+        <div id="chart-container" class="p-8 pb-4 hidden flex items-center justify-center relative">
+            <div class="relative w-full h-56">
+                <canvas id="expense-chart"></canvas>
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-1">
+                    <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Total Spent</span>
+                    <span class="text-xl font-black text-gray-900 tracking-tight" id="center-spent">0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 flex flex-col gap-3 min-h-[150px]" id="category-breakdown-list">
+            <div class="flex justify-between items-center pb-3 border-b border-dashed border-gray-100"><div class="flex gap-2 items-center"><div class="skeleton w-3 h-3 rounded-full"></div><div class="skeleton w-24 h-4"></div></div><div class="flex flex-col items-end gap-1"><div class="skeleton w-12 h-4"></div><div class="skeleton w-8 h-2"></div></div></div>
+            <div class="flex justify-between items-center pb-3 border-b border-dashed border-gray-100"><div class="flex gap-2 items-center"><div class="skeleton w-3 h-3 rounded-full"></div><div class="skeleton w-20 h-4"></div></div><div class="flex flex-col items-end gap-1"><div class="skeleton w-16 h-4"></div><div class="skeleton w-8 h-2"></div></div></div>
+        </div>
+        
+        <div class="p-6 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+            <span class="text-sm font-bold text-gray-800 uppercase tracking-widest">Remaining</span>
+            <span class="text-2xl font-bold skeleton w-24 h-8" id="rem">0.00</span>
+        </div>
+    </div>
+
+    <button id="dl-btn" onclick="downloadReport()" class="w-full bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-bold shadow-[0_8px_20px_rgba(230,57,70,0.3)] active:scale-95 transition-all flex justify-center items-center gap-2 slide-up delay-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        Download as Image
+    </button>
+    <script src="nav.js"></script>
+</body>
+</html>

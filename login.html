@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Expense Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        const supabase = createClient('https://xhcrkmmowcjsjiqdqcmb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoY3JrbW1vd2Nqc2ppcWRxY21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NzE2NjksImV4cCI6MjA5NjI0NzY2OX0.Pf71TqC4YZvvtcH17tH1CgWfDLPvKXodVP0FvPjXzIA');
+
+        // INSTANT MEMORY CHECK: Skip login if already signed in
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) window.location.href = 'index.html';
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            
+            btn.innerText = "Signing in...";
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                alert(error.message);
+                btn.innerText = "Sign In";
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center h-screen p-5 font-sans pb-safe">
+    <div class="bg-white p-8 rounded-[32px] shadow-sm border border-gray-100 w-full max-w-sm">
+        <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6 mx-auto">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        </div>
+        <h2 class="text-2xl font-bold mb-6 text-center tracking-tight">Welcome Back</h2>
+        <form id="login-form" class="space-y-4">
+            <input id="email" type="email" placeholder="Email Address" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-red-500 transition-colors" required>
+            <input id="password" type="password" placeholder="Password" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-red-500 transition-colors" required>
+            <button id="login-btn" type="submit" class="w-full bg-red-600 text-white p-4 rounded-2xl font-bold active:scale-95 transition-transform shadow-[0_8px_20px_rgba(230,57,70,0.3)] mt-2">Sign In</button>
+        </form>
+    </div>
+</body>
+</html>

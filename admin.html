@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Expense Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(15px); }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; color: transparent !important; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        const supabase = createClient('https://xhcrkmmowcjsjiqdqcmb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoY3JrbW1vd2Nqc2ppcWRxY21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NzE2NjksImV4cCI6MjA5NjI0NzY2OX0.Pf71TqC4YZvvtcH17tH1CgWfDLPvKXodVP0FvPjXzIA');
+
+        const ADMIN_EMAIL = 'Mh.nus123@gmail.com';
+        let currentAdded = 0; let currentSpent = 0;
+
+        window.compressAndUpload = async (file, userId, imgElementId) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async () => {
+                        const canvas = document.createElement('canvas');
+                        const scaleSize = 150 / img.width;
+                        canvas.width = 150; canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                        document.getElementById(imgElementId).src = base64; 
+                        await supabase.from('profiles').update({ avatar_base64: base64 }).eq('id', userId);
+                        resolve();
+                    };
+                };
+            });
+        };
+
+        window.updateName = async (userId, currentName) => {
+            const newName = prompt("Update User Display Name:", currentName || "");
+            if (newName && newName !== currentName) {
+                await supabase.from('profiles').update({ full_name: newName }).eq('id', userId);
+                window.location.reload();
+            }
+        };
+
+        window.deleteSession = async (sessionId) => {
+            if(confirm("Permanently delete this session record?")) {
+                await supabase.from('financial_sessions').delete().eq('id', sessionId);
+                window.location.reload();
+            }
+        };
+
+        async function loadAdminData() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session || session.user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) { window.location.replace('index.html'); return; }
+
+            const { data: txData } = await supabase.from('transactions').select('*');
+            
+            txData.forEach(tx => {
+                if (tx.type === 'balance') currentAdded += Number(tx.amount);
+                else currentSpent += Number(tx.amount);
+            });
+
+            const addedEl = document.getElementById('live-added');
+            const spentEl = document.getElementById('live-spent');
+            const remEl = document.getElementById('live-rem');
+
+            addedEl.classList.remove('skeleton', 'w-16', 'h-4');
+            addedEl.innerText = currentAdded.toLocaleString('en-US', {minimumFractionDigits: 2});
+            spentEl.classList.remove('skeleton', 'w-16', 'h-4');
+            spentEl.innerText = currentSpent.toLocaleString('en-US', {minimumFractionDigits: 2});
+            remEl.classList.remove('skeleton', 'w-24', 'h-6');
+            remEl.innerText = (currentAdded - currentSpent).toLocaleString('en-US', {minimumFractionDigits: 2});
+
+            const { data: profiles } = await supabase.from('profiles').select('*');
+            const userDirectory = document.getElementById('user-directory');
+            if (!profiles || profiles.length === 0) {
+                userDirectory.innerHTML = '<p class="text-xs text-gray-400">No profiles found.</p>';
+            } else {
+                userDirectory.innerHTML = profiles.map((p, i) => `
+                    <div class="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl mb-3 shadow-sm slide-up" style="animation-delay: ${i * 50}ms">
+                        <label class="relative cursor-pointer block active:scale-95 transition-transform shrink-0">
+                            <img id="img-${p.id}" src="${p.avatar_base64 || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}" class="w-12 h-12 rounded-full object-cover border border-gray-200 bg-gray-100">
+                            <div class="absolute bottom-0 right-0 bg-red-600 text-white rounded-full p-1 border-2 border-white shadow-sm">
+                                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            </div>
+                            <input type="file" class="hidden" accept="image/*" onchange="compressAndUpload(this.files[0], '${p.id}', 'img-${p.id}')">
+                        </label>
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="font-bold text-sm text-gray-800">${p.full_name || 'No Name Set'}</p>
+                                <button onclick="updateName('${p.id}', '${p.full_name || ''}')" class="text-gray-400 p-1.5 bg-gray-50 rounded-full active:scale-95 hover:bg-gray-100 transition-colors">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-gray-400 font-medium">${p.email}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            const { data: sessions } = await supabase.from('financial_sessions').select('*').order('closed_at', { ascending: false });
+            const sessionUI = document.getElementById('session-history');
+            if (sessions.length === 0) {
+                sessionUI.innerHTML = '<p class="text-xs text-gray-400">No archived sessions.</p>';
+            } else {
+                sessionUI.innerHTML = sessions.map((s, i) => `
+                    <div class="bg-white p-4 rounded-2xl border border-gray-100 mb-3 flex justify-between items-center shadow-sm slide-up" style="animation-delay: ${100 + (i * 50)}ms">
+                        <div>
+                            <p class="font-bold text-sm text-gray-800">${s.period_name}</p>
+                            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mt-1">Remaining: ৳${(Number(s.total_added) - Number(s.total_spent)).toFixed(2)}</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <p class="text-xs font-bold text-green-600">+${Number(s.total_added).toLocaleString()}</p>
+                                <p class="text-xs font-bold text-red-600">-${Number(s.total_spent).toLocaleString()}</p>
+                            </div>
+                            <button onclick="deleteSession('${s.id}')" class="p-2.5 bg-red-50 text-red-600 rounded-full active:scale-90 transition-transform">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        document.getElementById('close-session-btn').addEventListener('click', async () => {
+            const periodName = prompt("Enter a name for this session (e.g., 'July 2026'):");
+            if (!periodName) return;
+            const btn = document.getElementById('close-session-btn');
+            btn.innerHTML = `<svg class="animate-spin h-4 w-4 text-red-600 inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing...`;
+            const { error } = await supabase.from('financial_sessions').insert([{ period_name: periodName, total_added: currentAdded, total_spent: currentSpent }]);
+            if (error) { alert("Error: " + error.message); btn.innerText = "Close Session & Wipe Ledger"; return; }
+            await supabase.from('transactions').delete().not('id', 'is', 'null');
+            window.location.replace('index.html');
+        });
+
+        loadAdminData();
+    </script>
+</head>
+<body class="bg-gray-50 font-sans p-5 pb-24">
+    <div class="flex items-center gap-3 mb-6 slide-up">
+        <button onclick="window.location.replace('profile.html')" class="p-2 bg-gray-200 hover:bg-gray-300 rounded-full active:scale-95 transition-all">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+        <h1 class="text-2xl font-bold tracking-tight text-gray-900">System Admin</h1>
+    </div>
+
+    <div class="bg-white p-6 rounded-[24px] shadow-sm border border-red-100 mb-6 relative overflow-hidden slide-up delay-100">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-red-800"></div>
+        <h2 class="font-bold text-sm uppercase tracking-widest text-gray-400 mb-4">Active Global Session</h2>
+        
+        <div class="space-y-3 mb-6 pb-5 border-b border-gray-100 border-dashed">
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-semibold text-gray-600">Global Admin Top-Ups:</span>
+                <span class="text-sm font-bold text-green-600 flex items-center">+<span id="live-added" class="skeleton w-16 h-4 ml-1 block"></span></span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-semibold text-gray-600">Global User Spending:</span>
+                <span class="text-sm font-bold text-red-600 flex items-center">-<span id="live-spent" class="skeleton w-16 h-4 ml-1 block"></span></span>
+            </div>
+        </div>
+        
+        <div class="flex justify-between items-center mb-6">
+            <span class="text-sm font-bold text-gray-800 uppercase tracking-widest">Total Remaining:</span>
+            <span class="text-xl font-bold text-gray-900 flex items-center">৳<span id="live-rem" class="skeleton w-24 h-6 ml-1 block"></span></span>
+        </div>
+
+        <button id="close-session-btn" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 p-4 rounded-2xl font-bold active:scale-95 transition-all text-sm shadow-sm">Close Session & Wipe Ledger</button>
+    </div>
+
+    <div class="mb-6 slide-up delay-200">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">User Control Directory</h3>
+        </div>
+        <div id="user-directory">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-3 flex items-center gap-4">
+                <div class="skeleton w-12 h-12 rounded-full shrink-0"></div>
+                <div class="space-y-2 w-full"><div class="skeleton w-32 h-4"></div><div class="skeleton w-20 h-3"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="slide-up delay-200">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Archived Sessions</h3>
+        <div id="session-history">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                <div class="space-y-2"><div class="skeleton w-24 h-4"></div><div class="skeleton w-32 h-3"></div></div>
+                <div class="skeleton w-16 h-6"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Expense Tracker</title>
+    
+    <!-- PWA Installation Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#dc2626">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Premium Native Animations */
+        body { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(20px); }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        
+        /* Shimmer Skeleton Loader */
+        .skeleton { 
+            background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); 
+            background-size: 200% 100%; 
+            animation: shimmer 1.5s infinite; 
+            border-radius: 8px; color: transparent !important; user-select: none;
+        }
+        .skeleton-dark { 
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 75%); 
+            background-size: 200% 100%; 
+            animation: shimmer 1.5s infinite; 
+            color: transparent !important;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        const supabase = createClient('https://xhcrkmmowcjsjiqdqcmb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoY3JrbW1vd2Nqc2ppcWRxY21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NzE2NjksImV4cCI6MjA5NjI0NzY2OX0.Pf71TqC4YZvvtcH17tH1CgWfDLPvKXodVP0FvPjXzIA');
+
+        const ADMIN_EMAIL = 'Mh.nus123@gmail.com';
+        const stickerStyles = { 'Must': 'bg-red-100 text-red-700 border-red-200', 'Need': 'bg-blue-100 text-blue-700 border-blue-200', 'Want': 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200' };
+
+        async function loadDashboard() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) { window.location.href = 'login.html'; return; }
+            const user = session.user;
+            const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+            await supabase.from('profiles').upsert({ id: user.id, email: user.email }, { onConflict: 'id', ignoreDuplicates: true });
+
+            const { data: profile } = await supabase.from('profiles').select('avatar_base64, full_name').eq('id', user.id).single();
+            const avatarImg = document.getElementById('dash-avatar');
+            const eggAvatarImg = document.getElementById('egg-avatar'); // The Easter Egg Avatar
+            const greeting = document.getElementById('dash-greeting');
+            
+            avatarImg.classList.remove('skeleton');
+            greeting.classList.remove('skeleton');
+            
+            if (profile && profile.avatar_base64) {
+                avatarImg.src = profile.avatar_base64;
+                eggAvatarImg.src = profile.avatar_base64; // Syncs the hidden image instantly
+            }
+            greeting.innerText = profile?.full_name ? `Hi, ${profile.full_name.split(' ')[0]}!` : (isAdmin ? 'Hi, Admin!' : 'Hi, User!');
+
+            const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+            
+            let totalAdded = 0, totalSpent = 0, addedThisMonth = 0, spentThisMonth = 0;
+            const currentMonth = new Date().getMonth(); const currentYear = new Date().getFullYear();
+
+            data.forEach(tx => {
+                const amount = Number(tx.amount);
+                const isThisMonth = new Date(tx.created_at).getMonth() === currentMonth && new Date(tx.created_at).getFullYear() === currentYear;
+                if (tx.type === 'balance') { totalAdded += amount; if (isThisMonth) addedThisMonth += amount; } 
+                else { totalSpent += amount; if (isThisMonth) spentThisMonth += amount; }
+            });
+
+            const avail = document.getElementById('available-now');
+            const added = document.getElementById('added-month');
+            const spent = document.getElementById('spent-month');
+            
+            avail.classList.remove('skeleton-dark'); 
+            avail.innerText = (totalAdded - totalSpent).toLocaleString('en-US', {minimumFractionDigits: 2});
+            
+            added.parentElement.classList.remove('skeleton-dark', 'w-16', 'h-4'); 
+            added.innerText = addedThisMonth.toLocaleString('en-US', {minimumFractionDigits: 2});
+            
+            spent.parentElement.classList.remove('skeleton-dark', 'w-16', 'h-4'); 
+            spent.innerText = spentThisMonth.toLocaleString('en-US', {minimumFractionDigits: 2});
+
+            const recent = data.slice(0, 4);
+            const list = document.getElementById('recent-list');
+            
+            if (recent.length === 0) {
+                list.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 opacity-60 slide-up delay-200">
+                        <svg class="w-16 h-16 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p class="text-sm font-semibold text-gray-500">No activity yet</p>
+                    </div>`;
+            } else {
+                list.innerHTML = recent.map((tx, i) => {
+                    const isExpense = tx.type === 'expense';
+                    const dateStr = new Date(tx.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                    const sticker = (isExpense && tx.priority) ? `<span class="px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${stickerStyles[tx.priority] || 'bg-gray-100'}">${tx.priority}</span>` : '';
+                        
+                    return `
+                    <div class="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100 slide-up" style="animation-delay: ${150 + (i * 50)}ms">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <p class="font-bold text-sm text-gray-800">${tx.description}</p>
+                                ${sticker}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">${isExpense ? tx.category : 'System Top-Up'}</p>
+                                <span class="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                <p class="text-[10px] text-gray-400">${dateStr}</p>
+                            </div>
+                        </div>
+                        <p class="font-bold text-sm ${isExpense ? 'text-gray-900' : 'text-green-500'}">
+                            ${isExpense ? '-' : '+'}${Number(tx.amount).toFixed(2)}
+                        </p>
+                    </div>
+                `}).join('');
+            }
+        }
+
+        // --- FANTASTIC EASTER EGG LOGIC ---
+        let tapCount = 0; let tapTimer;
+        window.triggerEasterEgg = () => {
+            tapCount++; clearTimeout(tapTimer);
+            
+            if(window.Haptics) window.Haptics.light(); 
+            else if(navigator.vibrate) navigator.vibrate(30);
+
+            if (tapCount >= 5) {
+                const egg = document.getElementById('easter-egg');
+                
+                // Heavy heartbeat vibration
+                if(navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+                
+                egg.classList.remove('opacity-0', 'pointer-events-none');
+                egg.classList.add('opacity-100');
+                
+                setTimeout(() => { 
+                    egg.classList.remove('opacity-100');
+                    egg.classList.add('opacity-0', 'pointer-events-none');
+                    tapCount = 0; 
+                }, 4000);
+            }
+            tapTimer = setTimeout(() => { tapCount = 0; }, 1000);
+        };
+
+        loadDashboard();
+    </script>
+</head>
+<body class="bg-gray-50 font-sans p-5 pb-24 overflow-x-hidden">
+    
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6 mt-2 slide-up">
+        <div onclick="triggerEasterEgg()" class="cursor-pointer select-none">
+            <p id="dash-greeting" class="text-xs font-bold text-gray-500 uppercase tracking-wider skeleton w-20 h-4 mb-1">Loading...</p>
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900">Dashboard</h1>
+        </div>
+        <button onclick="navTo('profile.html')" class="active:scale-95 transition-transform appearance-none bg-transparent p-0 border-0">
+            <img id="dash-avatar" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm skeleton">
+        </button>
+    </div>
+
+    <!-- Master Balance Card -->
+    <div class="bg-gradient-to-br from-red-600 via-red-500 to-red-800 text-white rounded-[32px] p-6 shadow-[0_12px_40px_-12px_rgba(230,57,70,0.6)] mb-8 relative overflow-hidden slide-up delay-100">
+        <div class="absolute -right-10 -top-10 w-48 h-48 bg-white/20 rounded-full blur-3xl"></div>
+        <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-black/20 rounded-full blur-3xl"></div>
+        
+        <p class="text-xs font-semibold uppercase tracking-widest opacity-80 mb-2 relative z-10">Family Balance</p>
+        <div class="flex items-baseline gap-2 relative z-10">
+            <span class="text-2xl font-bold opacity-80">৳</span>
+            <h1 class="text-4xl font-bold tracking-tighter skeleton-dark min-w-[120px] h-10" id="available-now">0.00</h1>
+        </div>
+        <div class="mt-6 border-t border-white/20 pt-4 flex justify-between items-center relative z-10">
+            <div class="flex flex-col">
+                <p class="text-[10px] opacity-80 font-medium tracking-widest uppercase mb-1">Total Added</p>
+                <p class="text-sm font-bold tracking-wide text-green-300 skeleton-dark w-16 h-4">+<span id="added-month">0.00</span></p>
+            </div>
+            <div class="flex flex-col text-right items-end">
+                <p class="text-[10px] opacity-80 font-medium tracking-widest uppercase mb-1">Total Spent</p>
+                <p class="text-sm font-bold tracking-wide text-red-100 skeleton-dark w-16 h-4">-<span id="spent-month">0.00</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="slide-up delay-200">
+        <div class="flex justify-between items-center mb-4 px-1">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Activity</h3>
+            <button onclick="navTo('expenses.html')" class="text-xs font-bold text-red-600 active:opacity-50 transition-opacity appearance-none bg-transparent p-0 border-0">See All</button>
+        </div>
+        <div id="recent-list" class="flex flex-col gap-3">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                <div class="space-y-2"><div class="skeleton w-32 h-4"></div><div class="skeleton w-20 h-3"></div></div>
+                <div class="skeleton w-12 h-5"></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center opacity-70">
+                <div class="space-y-2"><div class="skeleton w-24 h-4"></div><div class="skeleton w-16 h-3"></div></div>
+                <div class="skeleton w-12 h-5"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FULL-SCREEN FANTASTIC EASTER EGG -->
+    <div id="easter-egg" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-700">
+        <div class="relative w-48 h-48 flex items-center justify-center mb-8">
+            <div class="absolute inset-0 border-4 border-red-600 rounded-full animate-ping opacity-75"></div>
+            <div class="absolute inset-2 border-4 border-white/20 rounded-full animate-[spin_3s_linear_infinite]"></div>
+            <div class="absolute inset-6 border-4 border-red-500 rounded-full animate-[spin_4s_linear_infinite_reverse]"></div>
+            
+            <!-- Personalized Avatar with glow effect inside the rings -->
+            <img id="egg-avatar" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="w-20 h-20 rounded-full object-cover relative z-10 border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,1)]">
+        </div>
+        <div class="text-center px-10 slide-up delay-100">
+            <p class="text-red-500 text-xs font-black uppercase tracking-[0.3em] mb-2 drop-shadow-sm">Built with precision</p>
+            <h2 class="text-white text-3xl font-black tracking-tight drop-shadow-md">Engineered by Dipu.</h2>
+        </div>
+    </div>
+
+    <!-- Background Navigation Script -->
+    <script src="nav.js"></script>
+</body>
+</html>

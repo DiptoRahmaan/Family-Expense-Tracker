@@ -1,0 +1,16 @@
+{
+  "name": "Family Ledger",
+  "short_name": "Ledger",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#dc2626",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Expense Tracker</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#dc2626">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(15px); }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; color: transparent !important; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        const supabase = createClient('https://xhcrkmmowcjsjiqdqcmb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoY3JrbW1vd2Nqc2ppcWRxY21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NzE2NjksImV4cCI6MjA5NjI0NzY2OX0.Pf71TqC4YZvvtcH17tH1CgWfDLPvKXodVP0FvPjXzIA');
+
+        const ADMIN_EMAIL = 'Mh.nus123@gmail.com';
+        let currentUser = null;
+
+        // UPGRADED HD IMAGE COMPRESSOR
+        async function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        // Increased resolution from 150px to 500px for Retina/AMOLED clarity
+                        const scaleSize = 500 / img.width; 
+                        canvas.width = 500; 
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        // Increased quality from 70% to 95%
+                        resolve(canvas.toDataURL('image/jpeg', 0.95)); 
+                    };
+                };
+            });
+        }
+
+        async function loadProfile() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) { window.location.href = 'login.html'; return; }
+            currentUser = session.user;
+
+            const emailEl = document.getElementById('user-email');
+            emailEl.classList.remove('skeleton', 'w-32', 'h-4');
+            emailEl.innerText = currentUser.email;
+
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+            const avatarEl = document.getElementById('avatar-img');
+            const nameEditSection = document.getElementById('name-edit-section');
+            const displayNameEl = document.getElementById('display-name');
+            
+            if (profile) {
+                if (profile.avatar_base64) avatarEl.src = profile.avatar_base64;
+                
+                if (profile.full_name) {
+                    displayNameEl.innerText = profile.full_name;
+                    displayNameEl.classList.remove('hidden');
+                    nameEditSection.classList.add('hidden'); 
+                } else {
+                    nameEditSection.classList.remove('hidden'); 
+                }
+            }
+
+            if (currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+                document.getElementById('admin-section').classList.remove('hidden');
+                document.getElementById('role-badge').innerText = 'System Admin';
+                document.getElementById('role-badge').classList.replace('text-gray-400', 'text-red-600');
+            }
+        }
+
+        document.getElementById('avatar-upload').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Instantly show processing state
+                const avatarEl = document.getElementById('avatar-img');
+                avatarEl.style.opacity = '0.5';
+                
+                const compressedAvatar = await compressImage(file);
+                avatarEl.src = compressedAvatar;
+                avatarEl.style.opacity = '1';
+                
+                await supabase.from('profiles').update({ avatar_base64: compressedAvatar }).eq('id', currentUser.id);
+            }
+        });
+
+        document.getElementById('save-profile-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('save-profile-btn');
+            const originalText = btn.innerText;
+            const fullName = document.getElementById('full-name-input').value;
+            
+            if (!fullName.trim()) return alert("Please enter a name first.");
+
+            btn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Saving...`;
+            
+            const { error } = await supabase.from('profiles').update({ full_name: fullName }).eq('id', currentUser.id);
+            
+            if (error) {
+                alert("Error saving name: " + error.message);
+                btn.innerText = originalText;
+            } else {
+                window.location.reload(); 
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            window.location.replace('login.html');
+        });
+
+        // SMOOTH THEME TOGGLE LOGIC
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeToggleKnob = document.getElementById('theme-toggle-knob');
+        const isDark = localStorage.getItem('theme') === 'dark';
+
+        if (isDark) {
+            themeToggleBtn.classList.replace('bg-gray-200', 'bg-red-500');
+            themeToggleKnob.classList.replace('translate-x-1', 'translate-x-6');
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            const html = document.documentElement;
+            const willBeDark = !html.classList.contains('dark');
+            
+            if (willBeDark) {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                themeToggleBtn.classList.replace('bg-gray-200', 'bg-red-500');
+                themeToggleKnob.classList.replace('translate-x-1', 'translate-x-6');
+            } else {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                themeToggleBtn.classList.replace('bg-red-500', 'bg-gray-200');
+                themeToggleKnob.classList.replace('translate-x-6', 'translate-x-1');
+            }
+        });
+
+        loadProfile();
+    </script>
+</head>
+<body class="bg-gray-50 font-sans p-5 pb-32">
+    <div class="mb-6 slide-up">
+        <h1 class="text-2xl font-bold tracking-tight">Account Profile</h1>
+    </div>
+    
+    <div class="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 mb-6 slide-up delay-100">
+        <div class="flex items-center gap-4 mb-6">
+            <div class="relative w-16 h-16 group shrink-0">
+                <img id="avatar-img" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="w-16 h-16 rounded-full object-cover border-2 border-red-50 bg-gray-100 transition-opacity group-hover:opacity-80">
+                <label class="absolute bottom-0 right-0 bg-gray-900 text-white p-1.5 rounded-full cursor-pointer shadow-md active:scale-90 transition-transform">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <input type="file" id="avatar-upload" class="hidden" accept="image/*">
+                </label>
+            </div>
+            <div class="overflow-hidden">
+                <p id="role-badge" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Active User</p>
+                <p id="display-name" class="text-lg font-bold text-gray-900 truncate hidden mb-0.5"></p>
+                <p id="user-email" class="text-sm font-bold text-gray-500 skeleton w-32 h-4 truncate">Loading...</p>
+            </div>
+        </div>
+
+        <div id="name-edit-section" class="space-y-4 hidden pt-2 border-t border-gray-50">
+            <div>
+                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider px-1">Set Display Name</label>
+                <input id="full-name-input" type="text" placeholder="e.g. John Doe" class="w-full mt-2 p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-red-400 focus:ring-4 focus:ring-red-50 transition-all font-semibold">
+                <p class="text-[10px] text-gray-400 px-1 mt-2">Note: You can only set your name once.</p>
+            </div>
+            <button id="save-profile-btn" class="w-full bg-gray-900 text-white p-4 rounded-2xl font-bold active:scale-95 transition-transform text-sm shadow-md">Save Display Name</button>
+        </div>
+    </div>
+
+    <div class="mb-6 slide-up delay-200">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">App Preferences</h3>
+        <div class="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 flex justify-between items-center cursor-pointer select-none" onclick="document.getElementById('theme-toggle-btn').click()">
+            <div class="flex items-center gap-4">
+                <div class="p-2.5 bg-gray-900 text-white rounded-xl shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </div>
+                <p class="text-sm font-bold text-gray-900">Dark Mode</p>
+            </div>
+            <button id="theme-toggle-btn" class="relative inline-flex h-7 w-12 items-center rounded-full bg-gray-200 transition-colors focus:outline-none pointer-events-none">
+                <span id="theme-toggle-knob" class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 translate-x-1"></span>
+            </button>
+        </div>
+    </div>
+
+    <div id="admin-section" class="hidden mb-6 slide-up delay-200">
+        <button onclick="window.location.replace('admin.html')" class="w-full bg-gradient-to-r from-red-600 to-red-700 text-white p-4 rounded-2xl font-bold flex justify-center items-center gap-2 active:scale-95 transition-transform shadow-[0_8px_20px_rgba(230,57,70,0.3)]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Admin Dashboard
+        </button>
+    </div>
+
+    <button id="logout-btn" class="w-full bg-red-50 text-red-600 border border-red-100 p-4 rounded-2xl font-bold active:scale-95 transition-transform flex justify-center items-center gap-2 slide-up delay-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+        Secure Log Out
+    </button>
+    <script src="nav.js"></script>
+</body>
+</html>
