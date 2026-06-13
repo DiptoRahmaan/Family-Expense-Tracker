@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home - Expense Tracker</title>
     
-    <!-- PWA Installation Tags -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#dc2626">
     <link rel="icon" type="image/png" href="icon.png">
@@ -13,7 +12,6 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Premium Native Animations */
         body { animation: fadeIn 0.4s ease-out; }
         .slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(20px); }
         .delay-100 { animation-delay: 100ms; }
@@ -21,19 +19,8 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
         
-        /* Shimmer Skeleton Loader */
-        .skeleton { 
-            background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); 
-            background-size: 200% 100%; 
-            animation: shimmer 1.5s infinite; 
-            border-radius: 8px; color: transparent !important; user-select: none;
-        }
-        .skeleton-dark { 
-            background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 75%); 
-            background-size: 200% 100%; 
-            animation: shimmer 1.5s infinite; 
-            color: transparent !important;
-        }
+        .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; color: transparent !important; user-select: none; }
+        .skeleton-dark { background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; color: transparent !important; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
     <script type="module">
@@ -53,7 +40,7 @@
 
             const { data: profile } = await supabase.from('profiles').select('avatar_base64, full_name').eq('id', user.id).single();
             const avatarImg = document.getElementById('dash-avatar');
-            const eggAvatarImg = document.getElementById('egg-avatar'); // The Easter Egg Avatar
+            const eggAvatarImg = document.getElementById('egg-avatar');
             const greeting = document.getElementById('dash-greeting');
             
             avatarImg.classList.remove('skeleton');
@@ -61,7 +48,7 @@
             
             if (profile && profile.avatar_base64) {
                 avatarImg.src = profile.avatar_base64;
-                eggAvatarImg.src = profile.avatar_base64; // Syncs the hidden image instantly
+                eggAvatarImg.src = profile.avatar_base64; 
             }
             greeting.innerText = profile?.full_name ? `Hi, ${profile.full_name.split(' ')[0]}!` : (isAdmin ? 'Hi, Admin!' : 'Hi, User!');
 
@@ -106,9 +93,12 @@
                     const isExpense = tx.type === 'expense';
                     const dateStr = new Date(tx.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
                     const sticker = (isExpense && tx.priority) ? `<span class="px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${stickerStyles[tx.priority] || 'bg-gray-100'}">${tx.priority}</span>` : '';
-                        
+                    
+                    // Crucial Step: Pass ID and specific data so tapping opens the Edit Sheet
+                    const safeDesc = tx.description ? tx.description.replace(/'/g, "\\'") : '';
+                    
                     return `
-                    <div class="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100 slide-up" style="animation-delay: ${150 + (i * 50)}ms">
+                    <div onclick="openSheet('${tx.id}', ${tx.amount}, '${safeDesc}', '${tx.category}', '${tx.priority}', '${tx.type}')" class="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100 slide-up cursor-pointer active:scale-95 transition-all" style="animation-delay: ${150 + (i * 50)}ms">
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-1">
                                 <p class="font-bold text-sm text-gray-800">${tx.description}</p>
@@ -128,23 +118,17 @@
             }
         }
 
-        // --- FANTASTIC EASTER EGG LOGIC ---
         let tapCount = 0; let tapTimer;
         window.triggerEasterEgg = () => {
             tapCount++; clearTimeout(tapTimer);
-            
             if(window.Haptics) window.Haptics.light(); 
             else if(navigator.vibrate) navigator.vibrate(30);
 
             if (tapCount >= 5) {
                 const egg = document.getElementById('easter-egg');
-                
-                // Heavy heartbeat vibration
                 if(navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
-                
                 egg.classList.remove('opacity-0', 'pointer-events-none');
                 egg.classList.add('opacity-100');
-                
                 setTimeout(() => { 
                     egg.classList.remove('opacity-100');
                     egg.classList.add('opacity-0', 'pointer-events-none');
@@ -159,7 +143,6 @@
 </head>
 <body class="bg-gray-50 font-sans p-5 pb-24 overflow-x-hidden">
     
-    <!-- Header -->
     <div class="flex justify-between items-center mb-6 mt-2 slide-up">
         <div onclick="triggerEasterEgg()" class="cursor-pointer select-none">
             <p id="dash-greeting" class="text-xs font-bold text-gray-500 uppercase tracking-wider skeleton w-20 h-4 mb-1">Loading...</p>
@@ -170,7 +153,6 @@
         </button>
     </div>
 
-    <!-- Master Balance Card -->
     <div class="bg-gradient-to-br from-red-600 via-red-500 to-red-800 text-white rounded-[32px] p-6 shadow-[0_12px_40px_-12px_rgba(230,57,70,0.6)] mb-8 relative overflow-hidden slide-up delay-100">
         <div class="absolute -right-10 -top-10 w-48 h-48 bg-white/20 rounded-full blur-3xl"></div>
         <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-black/20 rounded-full blur-3xl"></div>
@@ -192,7 +174,6 @@
         </div>
     </div>
 
-    <!-- Recent Activity -->
     <div class="slide-up delay-200">
         <div class="flex justify-between items-center mb-4 px-1">
             <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Activity</h3>
@@ -210,14 +191,11 @@
         </div>
     </div>
 
-    <!-- FULL-SCREEN FANTASTIC EASTER EGG -->
     <div id="easter-egg" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-700">
         <div class="relative w-48 h-48 flex items-center justify-center mb-8">
             <div class="absolute inset-0 border-4 border-red-600 rounded-full animate-ping opacity-75"></div>
             <div class="absolute inset-2 border-4 border-white/20 rounded-full animate-[spin_3s_linear_infinite]"></div>
             <div class="absolute inset-6 border-4 border-red-500 rounded-full animate-[spin_4s_linear_infinite_reverse]"></div>
-            
-            <!-- Personalized Avatar with glow effect inside the rings -->
             <img id="egg-avatar" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="w-20 h-20 rounded-full object-cover relative z-10 border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,1)]">
         </div>
         <div class="text-center px-10 slide-up delay-100">
@@ -226,7 +204,6 @@
         </div>
     </div>
 
-    <!-- Background Navigation Script -->
     <script src="nav.js"></script>
 </body>
 </html>

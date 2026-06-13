@@ -1,4 +1,4 @@
-// --- 1. GLOBAL HAPTICS ENGINE (True Native Feel) ---
+// --- 1. GLOBAL HAPTICS ENGINE ---
 window.Haptics = {
     light: () => { if(navigator.vibrate) navigator.vibrate(30); },
     success: () => { if(navigator.vibrate) navigator.vibrate([40, 30, 40]); },
@@ -30,11 +30,14 @@ html.dark input::placeholder { color: #4b5563 !important; }
 html.dark .bg-gray-900 { background-color: #ef4444 !important; color: #ffffff !important; border-color: #ef4444 !important;} 
 html.dark .bg-white\\/80 { background-color: rgba(10, 10, 10, 0.85) !important; border-top-color: rgba(255, 255, 255, 0.12) !important; backdrop-filter: blur(16px); }
 
-/* Bottom Sheet Specific Dark Adjustments */
+/* Bottom Sheet Dark Overrides */
 html.dark #bs-container { background-color: #0a0a0a !important; border-top: 1px solid rgba(255,255,255,0.12); }
 html.dark #bs-backdrop { background-color: rgba(0,0,0,0.8); }
 #bs-amount-container:focus-within { border-color: #fca5a5; box-shadow: 0 0 0 4px rgba(254, 226, 226, 0.5); }
 html.dark #bs-amount-container:focus-within { border-color: #ef4444 !important; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2) !important; }
+
+/* Edit/Delete Buttons Dark Adjustments */
+html.dark #bs-delete-btn { background-color: rgba(239, 68, 68, 0.1) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.2) !important; }
 `;
 
 const styleEl = document.createElement('style');
@@ -54,7 +57,7 @@ window.navTo = function(targetPage) {
     else window.location.replace(targetPage);
 };
 
-// --- 4. INJECT BOTTOM NAV BAR & BOTTOM SHEET OVERLAY ---
+// --- 4. INJECT BOTTOM NAV BAR & SMART EDIT OVERLAY ---
 const navHTML = `
 <div id="bs-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-500 ease-out" onclick="closeSheet()"></div>
 <div id="bs-container" class="fixed bottom-0 left-0 w-full bg-gray-50 rounded-t-[32px] z-[70] transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] pb-safe pt-2 flex flex-col max-h-[90vh] shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
@@ -90,7 +93,13 @@ const navHTML = `
             </div>
 
             <input id="bs-desc" type="text" placeholder="Description / Note" class="w-full p-4 bg-white border border-gray-100 rounded-[20px] shadow-sm focus:outline-none focus:border-red-400 focus:ring-4 focus:ring-red-50 transition-all font-bold" required>
-            <button id="bs-save-btn" type="submit" class="w-full bg-gray-900 text-white p-4 rounded-[20px] font-bold active:scale-95 transition-transform shadow-lg flex justify-center items-center gap-2 mt-2">Complete Entry</button>
+            
+            <div class="flex gap-3 mt-2">
+                <button id="bs-delete-btn" type="button" onclick="deleteEntry()" class="hidden bg-red-50 text-red-600 border border-red-100 p-4 rounded-[20px] font-bold active:scale-95 transition-transform w-16 flex items-center justify-center shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+                <button id="bs-save-btn" type="submit" class="flex-1 bg-gray-900 text-white p-4 rounded-[20px] font-bold active:scale-95 transition-transform shadow-lg flex justify-center items-center gap-2">Complete Entry</button>
+            </div>
         </form>
     </div>
 </div>
@@ -104,11 +113,9 @@ const navHTML = `
         <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
         <span class="text-[10px] font-bold">Reports</span>
     </button>
-    
     <button onclick="openSheet()" class="relative -top-5 bg-gray-900 text-white p-4 rounded-full shadow-[0_8px_20px_rgba(0,0,0,0.3)] active:scale-90 transition-transform">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
     </button>
-
     <button onclick="navTo('expenses.html')" class="flex flex-col items-center p-2 text-gray-400 active:scale-95 transition-transform" id="nav-history">
         <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         <span class="text-[10px] font-bold">History</span>
@@ -122,7 +129,6 @@ const navHTML = `
 
 document.body.insertAdjacentHTML('beforeend', navHTML);
 
-// Highlight Active Tab
 if (currentPage.includes('index.html') || currentPage === '') {
     const el = document.getElementById('nav-home'); if(el) el.classList.replace('text-gray-400', 'text-red-600');
 } else if (currentPage.includes('reports.html')) {
@@ -133,10 +139,13 @@ if (currentPage.includes('index.html') || currentPage === '') {
     const el = document.getElementById('nav-profile'); if(el) el.classList.replace('text-gray-400', 'text-red-600');
 }
 
-// --- 5. BOTTOM SHEET LOGIC & BACKGROUND SUPABASE SYNC ---
+// --- 5. BOTTOM SHEET LOGIC (NEW + EDIT + DELETE) ---
 let navSupabase;
 let navIsAdmin = false;
 let navCurrentUser = null;
+
+// Global State Variables
+window.bsEditId = null; 
 let bsPriority = 'Need';
 let bsCategory = 'Food & Dining';
 
@@ -166,19 +175,55 @@ window.selectBsTile = (group, value) => {
     });
 };
 
-window.openSheet = () => {
+// Smart Open function that handles both Empty Forms and Pre-Filled Edits
+window.openSheet = (editId = null, amount = '', desc = '', category = 'Food & Dining', priority = 'Need', type = 'expense') => {
     window.Haptics.light();
     
-    if(navIsAdmin) {
-        document.getElementById('bs-title').innerText = "Add Family Balance";
-        document.getElementById('bs-expense-options').classList.add('hidden');
-        document.getElementById('bs-desc').placeholder = "Description (e.g., Monthly Allowance)";
+    // Set exact state
+    window.bsEditId = editId;
+    bsCategory = category;
+    bsPriority = priority;
+
+    const titleEl = document.getElementById('bs-title');
+    const amountEl = document.getElementById('bs-amount');
+    const descEl = document.getElementById('bs-desc');
+    const deleteBtn = document.getElementById('bs-delete-btn');
+    const saveBtn = document.getElementById('bs-save-btn');
+    const optionsEl = document.getElementById('bs-expense-options');
+
+    amountEl.value = amount;
+    descEl.value = desc;
+
+    if (editId) {
+        // EDIT MODE
+        saveBtn.innerText = "Update Entry";
+        deleteBtn.classList.remove('hidden');
+        
+        if (type === 'balance') {
+            titleEl.innerText = "Edit Added Balance";
+            optionsEl.classList.add('hidden');
+        } else {
+            titleEl.innerText = "Edit Expense";
+            optionsEl.classList.remove('hidden');
+            selectBsTile('priority', priority);
+            selectBsTile('category', category);
+        }
     } else {
-        document.getElementById('bs-title').innerText = "Record Expense";
-        document.getElementById('bs-expense-options').classList.remove('hidden');
-        document.getElementById('bs-desc').placeholder = "Description / Note";
-        selectBsTile('priority', 'Need');
-        selectBsTile('category', 'Food & Dining');
+        // NEW MODE
+        saveBtn.innerText = "Complete Entry";
+        deleteBtn.classList.add('hidden');
+        
+        if (navIsAdmin) {
+            titleEl.innerText = "Add Family Balance";
+            optionsEl.classList.add('hidden');
+            descEl.placeholder = "Description (e.g., Monthly Allowance)";
+        } else {
+            titleEl.innerText = "Record Expense";
+            optionsEl.classList.remove('hidden');
+            descEl.placeholder = "Description / Note";
+            selectBsTile('priority', 'Need');
+            selectBsTile('category', 'Food & Dining');
+        }
     }
     
     document.getElementById('bs-backdrop').classList.remove('opacity-0', 'pointer-events-none');
@@ -189,32 +234,79 @@ window.closeSheet = () => {
     window.Haptics.light();
     document.getElementById('bs-backdrop').classList.add('opacity-0', 'pointer-events-none');
     document.getElementById('bs-container').classList.add('translate-y-full');
-    setTimeout(() => { document.getElementById('bs-form').reset(); }, 500); // Matches the new duration-500
+    setTimeout(() => { 
+        document.getElementById('bs-form').reset(); 
+        window.bsEditId = null;
+    }, 500); 
 };
 
+// Handle Deletions
+window.deleteEntry = async () => {
+    if(!window.bsEditId) return;
+    if(!confirm("Delete this entry permanently?")) return;
+    
+    window.Haptics.light();
+    const btn = document.getElementById('bs-delete-btn');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = `<svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+    
+    const { error } = await navSupabase.from('transactions').delete().eq('id', window.bsEditId);
+    
+    if (error) {
+        window.Haptics.warning();
+        alert(error.message);
+        btn.innerHTML = originalHTML;
+    } else {
+        window.Haptics.success();
+        closeSheet();
+        setTimeout(() => window.location.reload(), 300);
+    }
+};
+
+// Handle Saves / Updates
 document.getElementById('bs-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!navCurrentUser) return alert("System connecting, please try again in a moment.");
 
     const btn = document.getElementById('bs-save-btn');
+    const originalText = btn.innerText;
     const amount = document.getElementById('bs-amount').value;
     const desc = document.getElementById('bs-desc').value;
 
-    btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
+    btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
     
-    const { error } = await navSupabase.from('transactions').insert([{
-        type: navIsAdmin ? 'balance' : 'expense',
-        priority: navIsAdmin ? null : bsPriority,
+    // Base payload
+    const payload = {
         amount: parseFloat(amount),
-        category: navIsAdmin ? 'Global Deposit' : bsCategory,
-        description: desc || (navIsAdmin ? 'Funds Added' : 'Expense'),
-        user_id: navCurrentUser.id 
-    }]);
+        description: desc
+    };
+
+    let error;
+
+    if (window.bsEditId) {
+        // UPDATE MODE
+        if (!document.getElementById('bs-expense-options').classList.contains('hidden')) {
+            payload.category = bsCategory;
+            payload.priority = bsPriority;
+        }
+        const { error: updateErr } = await navSupabase.from('transactions').update(payload).eq('id', window.bsEditId);
+        error = updateErr;
+    } else {
+        // INSERT MODE
+        payload.user_id = navCurrentUser.id;
+        payload.type = navIsAdmin ? 'balance' : 'expense';
+        payload.category = navIsAdmin ? 'Global Deposit' : bsCategory;
+        payload.priority = navIsAdmin ? null : bsPriority;
+        payload.description = desc || (navIsAdmin ? 'Funds Added' : 'Expense');
+        
+        const { error: insertErr } = await navSupabase.from('transactions').insert([payload]);
+        error = insertErr;
+    }
 
     if (error) { 
         window.Haptics.warning();
         alert(error.message); 
-        btn.innerText = "Complete Entry"; 
+        btn.innerText = originalText; 
     } else { 
         window.Haptics.success();
         closeSheet();
