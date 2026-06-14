@@ -1,6 +1,6 @@
 {
   "name": "Family Ledger",
-  "short_name": "Ledger",
+  "short_name": "Xpensy",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#f9fafb",
